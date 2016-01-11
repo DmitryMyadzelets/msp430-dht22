@@ -1,0 +1,4 @@
+reset
+erase
+load msp430g2553.out
+run

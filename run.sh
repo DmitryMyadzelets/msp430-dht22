@@ -1,0 +1,2 @@
+make
+mspdebug rf2500
