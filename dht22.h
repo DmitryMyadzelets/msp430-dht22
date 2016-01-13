@@ -6,4 +6,6 @@ typedef struct DHT22 {
 } DHT22;
 
 
+
+
 #endif

@@ -1,4 +1,4 @@
-OBJECTS=main.o
+OBJECTS = main.o dht22.o
 
 GCC_DIR =  ../../gcc/bin
 SUPPORT_FILE_DIRECTORY = ../../gcc/include
