@@ -66,6 +66,16 @@ char* char2hex(unsigned char);
 DHT dht = { BIT4, &TACCR0 };
 // void (*dht_sensor_logic)(DHT*) = dht_logic;
 
+__attribute__((__interrupt__(PORT1_VECTOR)))
+isrPort1(void) {
+    if (dht.ix < 42) {
+        dht.arr[dht.ix] = TAR;
+        TAR = 0;
+        dht.ix++;
+    }
+    P1IFG &= ~dht.pin;      // Clear port interrupt flag
+}
+
 
 volatile static long cnt1 = 0;
 volatile static long cnt2 = 0;
@@ -422,18 +432,4 @@ isrTimerA0_IV(void) {
 //         // cnt2 = 0;
 //     }
 // }
-
-
-__attribute__((__interrupt__(PORT1_VECTOR)))
-isrPort1(void) {
-
-    if (dht.ix < 42) {
-        dht.arr[dht.ix] = TAR;
-        TAR = 0;
-        dht.ix++;
-    }
-
-    P1IFG &= ~dht.pin;      // Clear port interrupt flag
-    // cnt3++;
-}
 

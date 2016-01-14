@@ -79,29 +79,27 @@ inline void dht_logic(DHT *dht) {
             TACCTL1 &= ~CCIE;
             TACCTL2 &= ~CCIE;
 
-            P1OUT |= (*dht).pin;       // Set output high
-            __delay_cycles(40);     // Delay of 40 us at 1 MHz
-            P1DIR &= ~(*dht).pin;      // Set pin to input direction
+            P1OUT |= (*dht).pin;        // Set output high
+            __delay_cycles(40);         // Delay of 40 us at 1 MHz
+            P1DIR &= ~(*dht).pin;       // Set pin to input direction
 
             // Recieve sensor's 'handshake' signal
             // Wait for low level
-            i = 0;
-            while((P1IN & (*dht).pin) && (++i < 80));
+            i = 0; while((P1IN & (*dht).pin) && (++i < 80));
             // Wait for high level
-            i = 0;
-            while((!(P1IN & (*dht).pin)) && (++i < 80));
+            i = 0; while((!(P1IN & (*dht).pin)) && (++i < 80));
 
-            P1IES |= (*dht).pin;       // Interrupt on high-to-low edge
-            P1IE |= (*dht).pin;        // Enable pin interrupt
+            P1IES |= (*dht).pin;        // Interrupt on high-to-low edge
+            P1IE |= (*dht).pin;         // Enable pin interrupt
 
             TAR = 0;
             *(*dht).timer = 0;
-            *(*dht).timer += 6000;     // Set timeout of 6 ms (maximum response time)
-                                    // (In my setup real response time was about 4 ms)
+            *(*dht).timer += 6000;      // Set timeout of 6 ms (maximum response time)
+                                        // (In my setup real response time was about 4 ms)
             break;
 
         case 2: // Wait for timeout
-            P1IE &= ~(*dht).pin;       // Disable pin interrupt
+            P1IE &= ~(*dht).pin;        // Disable pin interrupt
             /*
             End of time critical section
             Enable interrupts we disabled in the beginning of the section
