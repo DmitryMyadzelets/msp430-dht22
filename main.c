@@ -59,35 +59,12 @@ char* ul2a(unsigned long);
 char* ul2hex(unsigned long);
 char* char2hex(unsigned char);
 
-// DHT22 sensor related declarations
 
-// Type of data the DHT sensor sends
-typedef union DHT_DATA {
-    struct {
-        char hh;        // Humidity, high byte
-        char hl;        // Humidity, low byte
-        char th;        // Temperature, high byte
-        char tl;        // Temperature, low byte
-        char crc;       // Checksum
-    } val;
-    char bytes[5];      // All sensor data in raw
-} DHT_DATA;
-
-typedef struct DHT {
-    int pin;            // MCU pin the sensor is connected to
-    volatile *timer;    // Pointer to a TimerA register
-    DHT_DATA data;      // Data recieved from the sensor
-    unsigned int ix;    // Index of bit in the data.bytes array
-} DHT;
 
 // DHT22 sensor related definitions
 
 DHT dht = { BIT4, &TACCR0 };
-unsigned int arr[42];
-
-
-void dht_logic(void);
-void (*dht_sensor_logic)(void) = dht_logic;
+// void (*dht_sensor_logic)(DHT*) = dht_logic;
 
 
 volatile static long cnt1 = 0;
@@ -165,7 +142,7 @@ void updateLCD(void) {
     for (i = 0; i < 40; i++) {
         byte = i >> 3;
         dht.data.bytes[byte] <<= 1;
-        dht.data.bytes[byte] |= arr[i + 1] > 100;
+        dht.data.bytes[byte] |= dht.arr[i + 1] > 100;
     }
 
     // bit = dht.ix % 40u;         // Put it in the range 0..39
@@ -186,7 +163,7 @@ void updateLCD(void) {
     // 0..15, 16..31, 32..39
     for (i = 0; i < 16; i++) {
         writeStringToLCD(":");
-        writeStringToLCD(ul2a(arr[i + 0]));
+        writeStringToLCD(ul2a(dht.arr[i + 0]));
     }
     // CRC
     setAddr(0, 4);
@@ -207,11 +184,9 @@ void updateLCD(void) {
     // }
 }
 
-DHT22 dht22;
 
 void main(void) {
 
-    dht22.test = 8;
 
     WDTCTL = WDTPW | WDTHOLD;           // Stop watchdog timer
 
@@ -402,7 +377,7 @@ char* char2hex(unsigned char i) {
 __attribute__((__interrupt__(TIMER0_A0_VECTOR)))
 isrTimerA0_R0(void) {
     cnt1++;
-    dht_sensor_logic();
+    dht_logic(&dht);
 }
 
 
@@ -448,140 +423,17 @@ isrTimerA0_IV(void) {
 //     }
 // }
 
-unsigned int ix;
 
 __attribute__((__interrupt__(PORT1_VECTOR)))
 isrPort1(void) {
 
-    if (ix < 42) {
-        arr[ix] = TAR;
+    if (dht.ix < 42) {
+        dht.arr[dht.ix] = TAR;
         TAR = 0;
-        ix++;
+        dht.ix++;
     }
 
     P1IFG &= ~dht.pin;      // Clear port interrupt flag
-    cnt3++;
+    // cnt3++;
 }
 
-
-// ============================================================================
-
-/*
-DHT22 Temperature & Humidity sensor
-
-Micro Controller Unit (MCU) talks with DHT.
-Initial state: MCU -> high
-
-Protocol timing table:
-    who     level   time, us (range)
-    -----------------------------------------
-    Handshake
-    MCU     low     1000 (800..20000)
-    MCU     high    30 (20..200)
-    DHT     low     80 (75..85)
-    DHT     high    80 (75..85)
-    DHT sends 40 bits to MCU
-    DHT     low     50 (48..55)
-    DHT     high    26 (22..30) if it sends 0
-    DHT     high    70 (68..75) if it sends 1
-    ...
-    DHT     low     50 (45..55)
-
-DHT must have min 2 sec delay between the requests.
-DHT must have min 1 sec after power on before the first request.
-
-DHT sends 40 bits (5 words x 8 bit):
-    8 + 8 = 16 bit  Humidity multiplied per 10, e.g 985 = 98.5%
-    8 + 8 = 16 bit  Temperature multiplied per 10, e.g 240 = 24.0 C
-    8 bit Checksum = OR of the fist 4 octets.
-
-In total, DHT may take up to (85 + 85) + (40 * (55 + 75)) + 55 = 5425 us = 6 ms.
-Though, it never happens in reality since it never sends 1's only.
-
-DHT sensor help:
-https://www.adafruit.com/datasheets/DHT22.pdf
-http://embedded-lab.com/blog/measurement-of-temperature-and-relative-humidity-using-dht11-sensor-and-pic-microcontroller/
-
-Min and max time of low-to-high signal for 0 and 1, microseconds:
-                       min     max
-0: #_____###_           70      85
-1: #_____#######_      116     130
-
-*/
-
-inline void dht_logic(void) {
-    static int cycles;
-
-    // State machine
-    static int ost, st = 0;
-    switch (ost = st) {
-
-        case 0: // Wait 2 seconds to allow the sensor make measurements
-            if (++cycles < 200) {       // 2sec / 10000us = 200
-                *dht.timer += 10000;    // Set delay of 10 ms
-                break;
-            }
-            P1DIR |= dht.pin;    // Set pin to output direction
-            P1OUT &= ~dht.pin;   // Set output low
-
-            *dht.timer += 1000;  // Set delay of 1 ms
-
-            st = 1;
-            break;
-
-        case 1: // Wait for the sensor response, and process it
-            dht.ix = ix = 0;
-            cnt3 = 0;
-            st = 2;
-            /*
-            Time critical section
-            Disable interrupts we don't want, enable interrupts we need.
-            */
-            TACCTL1 &= ~CCIE;
-            TACCTL2 &= ~CCIE;
-
-            P1OUT |= dht.pin;       // Set output high
-            __delay_cycles(40);     // Delay of 40 us at 1 MHz
-            P1DIR &= ~dht.pin;      // Set pin to input direction
-
-            // Recieve sensor's 'handshake' signal
-            get_lo();
-            get_hi();
-
-            P1IES |= dht.pin;       // Interrupt on high-to-low edge
-            P1IE |= dht.pin;        // Enable pin interrupt
-
-            TAR = 0;
-            *dht.timer = 0;
-            *dht.timer += 6000;     // Set timeout of 6 ms (maximum response time)
-                                    // (In my setup real response time was about 4 ms)
-            break;
-
-        case 2: // Wait for timeout
-            P1IE &= ~dht.pin;       // Disable pin interrupt
-            /*
-            End of time critical section
-            Enable interrupts we disabled in the beginning of the section
-            */
-            TACCTL1 |= CCIE;
-            TACCTL2 |= CCIE;
-            st = 0;
-            break;
-    }
-
-    if(ost ^ st) {
-        cycles = 0;
-    }
-}
-
-inline int get_lo() {
-    int i = 0;
-    while((P1IN & dht.pin) && (++i < 80));
-    return i;
-}
-
-inline int get_hi() {
-    int i = 0;
-    while((!(P1IN & dht.pin)) && (++i < 80));
-    return i < 80 ? i : 0;
-}
