@@ -155,7 +155,7 @@ void updateLCD(void) {
     for (i = 0; i < 40; i++) {
         byte = i >> 3;
         dht.data.bytes[byte] <<= 1;
-        dht.data.bytes[byte] |= dht.arr[i + 1] > 100;
+        dht.data.bytes[byte] |= dht.arr[i + 1] > 110;
     }
 
     // Check CRC
