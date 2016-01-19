@@ -76,7 +76,7 @@ inline int read_dht() {
 }
 
 
-inline void dht_logic() {
+inline void timerDHT(t) {
     static int cycles;
 
     // State machine
@@ -84,36 +84,24 @@ inline void dht_logic() {
     switch (ost = st) {
 
         case 0: // Wait 2 seconds to allow the sensor make measurements
-            if (++cycles < 200) {       // 2sec / 10000us = 200
-                *dht.timer += 10000;    // Set delay of 10 ms
+            if (++cycles < 40) {       // 2sec / 0.05s = 40
+                *dht.timer += 50000;    // Set delay of 50000 us = 0.05s
                 break;
             }
+
             P1DIR |= dht.pin;    // Set pin to output direction
             P1OUT &= ~dht.pin;   // Set output low
 
             *dht.timer += 1000;  // Set delay of 1 ms
-
             st = 1;
-            break;
+        break;
 
         case 1: // Wait for the sensor response, and process it
             __disable_interrupt();
             dht.ok = !read_dht();
             __enable_interrupt();
-            st = 2;
-            break;
-
-        case 2: // Wait for timeout
-            // P1IE &= ~dht.pin;        // Disable pin interrupt
-            /*
-            End of time critical section
-            Enable interrupts we disabled in the beginning of the section
-            */
-            // TACCTL0 |= CCIE;
-            // TACCTL1 |= CCIE;
-            // TACCTL2 |= CCIE;
             st = 0;
-            break;
+        break;
     }
 
     if(ost ^ st) {
@@ -122,29 +110,3 @@ inline void dht_logic() {
 }
 
 
-void startDHT() {
-}
-
-
-void timerDHT() {
-    static DHT_STATE ost, st = WAIT_FOR_START;
-
-    switch (ost = st) {
-        case WAIT_FOR_TIMER:
-        break;
-
-        case WAIT_FOR_START:
-            st = WAIT_2_SECONDS;
-        break;
-
-        case WAIT_2_SECONDS:
-            st = WAIT_FOR_RESPONSE;
-        break;
-
-        case WAIT_FOR_RESPONSE:
-        break;
-
-        case WAIT_FOR_TIMEOUT:
-        break;
-    }
-}

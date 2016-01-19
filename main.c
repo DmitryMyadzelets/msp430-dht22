@@ -69,7 +69,7 @@ volatile static long cnt5 = 0;
 
 // DHT22 sensor related definitions
 
-DHT dht = { BIT4, &TACCR0 };
+DHT dht = { BIT4, &TACCR0};
 // void (*dht_sensor_logic)(DHT*) = dht_logic;
 
 // __attribute__((__interrupt__(PORT1_VECTOR)))
@@ -143,24 +143,6 @@ void setupTimerA0() {
 
 
 void updateLCD(void) {
-    // clearBank(3);
-    // clearBank(4);
-    // clearBank(5);
-
-    // setAddr(10, 3);
-    // writeStringToLCD(ul2a(cnt1));
-
-    // setAddr(10, 4);
-    // writeStringToLCD(ul2a(cnt2));
-
-    // setAddr(0, 5);
-    // writeStringToLCD(ul2a(cnt3));
-    // writeStringToLCD(":");
-    // writeStringToLCD(ul2a(arr[0]));
-    // writeStringToLCD(":");
-    // writeStringToLCD(ul2a(arr[1]));
-    // writeStringToLCD(":");
-    // writeStringToLCD(ul2a(arr[2]));
 
     int i;
 
@@ -176,42 +158,25 @@ void updateLCD(void) {
         dht.data.bytes[byte] |= dht.arr[i + 1] > 100;
     }
 
-    // bit = dht.ix % 40u;         // Put it in the range 0..39
-    // byte = bit >> 3;            // byte = (0..39) / 8 = 0..4
-    // bit &= 0x7;                 // bit = (0..15)
-    // dht.data.bytes[byte] <<= 1; // Shift left the byte
-    // dht.data.bytes[byte] |= 1;
-
     // Check CRC
 
     int crc = 0;
     for (i = 0; i < 4; i++) { crc += dht.data.bytes[i]; }
     crc &= 0xff;
 
-    clearLCD();
-    // 
-    writeStringToLCD(ul2a(dht.cnt));
-    // // 0..15, 16..31, 32..39
-    // for (i = 0; i < 15; i++) {
-    //     writeStringToLCD(":");  
-    //     writeStringToLCD(ul2a(dht.arr[i + 0]));
-    // }
-
-    // CRC
-    setAddr(0, 4);
-    writeStringToLCD(dht.ok ? "ok" : "bad");
-    writeStringToLCD(",");
-    writeStringToLCD(crc ^ dht.data.val.crc ? "bad" : "ok");
-    // writeStringToLCD(ul2hex(crc));
-    // writeStringToLCD("-");
-    // writeStringToLCD(char2hex(dht.data.val.crc));
-
-    setAddr(0, 5);
+    int ok = dht.ok && !(crc ^ dht.data.val.crc);
     int hum = dht.data.val.hh * 256 + dht.data.val.hl;
     int temp = dht.data.val.th * 256 + dht.data.val.tl;
-    writeStringToLCD(ul2a(hum));
-    writeStringToLCD(" * ");
-    writeStringToLCD(ul2a(temp));
+
+    clearLCD();
+    writeStringToLCD("T  ");
+    writeStringToLCD(ok? ul2a(temp) : "-");
+    writeCharToLCD(0x7f);
+    writeCharToLCD('C');
+    setAddr(0, 1);
+    writeStringToLCD("RH ");
+    writeStringToLCD(ok? ul2a(hum) : "-");
+    writeCharToLCD('%');
 }
 
 
@@ -406,8 +371,7 @@ char* char2hex(unsigned char i) {
 // TimerA0 interrupt for register 0
 __attribute__((__interrupt__(TIMER0_A0_VECTOR)))
 isrTimerA0_R0(void) {
-    cnt1++;
-    dht_logic();
+    timerDHT(0);
 }
 
 
@@ -415,7 +379,6 @@ isrTimerA0_R0(void) {
 __attribute__((__interrupt__(TIMER0_A1_VECTOR)))
 isrTimerA0_IV(void) {
     static i = 0;
-    static sec = 0; 
     switch (TAIV) {
         case TA0IV_TACCR1:
             TACCR1 += TIMER_R1_DELAY;
@@ -427,10 +390,6 @@ isrTimerA0_IV(void) {
             // Use counter to get 1 sec interval
             if (++i > 99) {
                 i = 0;
-                sec++;
-                if(sec == 3) {
-                    // dht_start_read();
-                }
                 updateLCD();
                 cnt1 = 0;
                 cnt2 = 0;
