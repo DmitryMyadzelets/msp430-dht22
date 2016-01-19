@@ -1,3 +1,5 @@
+# http://mrbook.org/blog/tutorials/make/
+
 OBJECTS = main.o dht22.o
 
 GCC_DIR =  ../../gcc/bin

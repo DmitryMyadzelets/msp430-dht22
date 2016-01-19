@@ -59,6 +59,12 @@ char* ul2a(unsigned long);
 char* ul2hex(unsigned long);
 char* char2hex(unsigned char);
 
+// Variables for debugging
+volatile static long cnt1 = 0;
+volatile static long cnt2 = 0;
+volatile static long cnt3 = 0;
+volatile static long cnt4 = 0;
+volatile static long cnt5 = 0;
 
 
 // DHT22 sensor related definitions
@@ -66,22 +72,37 @@ char* char2hex(unsigned char);
 DHT dht = { BIT4, &TACCR0 };
 // void (*dht_sensor_logic)(DHT*) = dht_logic;
 
-__attribute__((__interrupt__(PORT1_VECTOR)))
-isrPort1(void) {
-    if (dht.ix < 42) {
-        dht.arr[dht.ix] = TAR;
-        TAR = 0;
-        dht.ix++;
-    }
-    P1IFG &= ~dht.pin;      // Clear port interrupt flag
-}
+// __attribute__((__interrupt__(PORT1_VECTOR)))
+// isrPort1(void) {
 
+//     if (dht.ix < 42) {
+//         dht.arr[dht.ix] = TAR - dht.tar;
+//         dht.ix++;
+//     }
 
-volatile static long cnt1 = 0;
-volatile static long cnt2 = 0;
-volatile static long cnt3 = 0;
-volatile static long cnt4 = 0;
-volatile static long cnt5 = 0;
+//     // switch (st) {
+//     //     case 0:                     // Low level on input
+//     //         P1IES &= ~dht.pin;      // Set interrupt on low-to-high edge
+//     //         hi_time = TAR - dht.tar;
+//     //         if (dht.ix < 42) {
+//     //             dht.arr[dht.ix] = lo_time < hi_time;
+//     //             dht.tar = TAR;
+//     //             dht.ix++;
+//     //         }
+//     //         st = 1;
+//     //     break;
+
+//     //     case 1:                     // High level on input
+//     //         P1IES |= dht.pin;       // Set interrupt on high-to-low edge
+//     //         lo_time = TAR - dht.tar;
+//     //         st = 0;
+//     //     break;
+//     // }
+
+//     dht.cnt++;
+//     dht.tar = TAR;
+//     P1IFG &= ~dht.pin;      // Clear port interrupt flag
+// }
 
 #define TIMER_R0_DELAY  (200 - 1)
 #define TIMER_R1_DELAY  (1000 - 1)
@@ -169,14 +190,17 @@ void updateLCD(void) {
 
     clearLCD();
     // 
-    writeStringToLCD(ul2a(cnt3));
-    // 0..15, 16..31, 32..39
-    for (i = 0; i < 16; i++) {
-        writeStringToLCD(":");
-        writeStringToLCD(ul2a(dht.arr[i + 0]));
-    }
+    writeStringToLCD(ul2a(dht.cnt));
+    // // 0..15, 16..31, 32..39
+    // for (i = 0; i < 15; i++) {
+    //     writeStringToLCD(":");  
+    //     writeStringToLCD(ul2a(dht.arr[i + 0]));
+    // }
+
     // CRC
     setAddr(0, 4);
+    writeStringToLCD(dht.ok ? "ok" : "bad");
+    writeStringToLCD(",");
     writeStringToLCD(crc ^ dht.data.val.crc ? "bad" : "ok");
     // writeStringToLCD(ul2hex(crc));
     // writeStringToLCD("-");
@@ -188,15 +212,10 @@ void updateLCD(void) {
     writeStringToLCD(ul2a(hum));
     writeStringToLCD(" * ");
     writeStringToLCD(ul2a(temp));
-    // for (i = 0; i < 5; i++) {
-    //     if(i) { writeStringToLCD("."); }
-    //     writeStringToLCD(char2hex(dht.data.bytes[i]));
-    // }
 }
 
 
 void main(void) {
-
 
     WDTCTL = WDTPW | WDTHOLD;           // Stop watchdog timer
 
@@ -250,6 +269,7 @@ void main(void) {
     __enable_interrupt();
 
     _BIS_SR(LPM0_bits);     // Enter LPM0
+    // _BIS_SR(LPM3_bits);     // TODO: Enter LPM3 (use ACLK)
 
 } // eof main
 
@@ -387,7 +407,7 @@ char* char2hex(unsigned char i) {
 __attribute__((__interrupt__(TIMER0_A0_VECTOR)))
 isrTimerA0_R0(void) {
     cnt1++;
-    dht_logic(&dht);
+    dht_logic();
 }
 
 

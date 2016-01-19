@@ -1,4 +1,4 @@
-#include <msp430g2553.h>
+#include <msp430.h>
 #include "dht22.h"
 
 
@@ -47,9 +47,35 @@ Min and max time of low-to-high signal for 0 and 1, microseconds:
 
 */
 
-inline void dht_logic(DHT *dht) {
+/*
+Returns:
+    0   - reading was done
+    -1  - error, no initial waiting for low level from the sensor
+    -2  - error during waiting for hight level from the sensor
+    -3  - error during waiting for low level from the sensor
+*/
+inline int read_dht() {
+    register int i;
+
+    P1OUT |= dht.pin;        // Set output high
+    __delay_cycles(40);      // Delay of 40 us at 1 MHz
+    P1DIR &= ~dht.pin;       // Set pin to input direction
+
+    dht.tar = TAR;
+    while(P1IN & dht.pin) { if ((TAR - dht.tar) > 100) return -1; }
+
+    for (i = 0; i < 42; i++) {
+        while(!(P1IN & dht.pin)) { if ((TAR - dht.tar) > 100) return -2; }
+        while(P1IN & dht.pin)    { if ((TAR - dht.tar) > 200) return -3; }
+        dht.arr[i] = TAR - dht.tar;
+        dht.tar = TAR;
+    }
+    return 0;
+}
+
+
+inline void dht_logic() {
     static int cycles;
-    register unsigned int i;
 
     // State machine
     static int ost, st = 0;
@@ -57,60 +83,66 @@ inline void dht_logic(DHT *dht) {
 
         case 0: // Wait 2 seconds to allow the sensor make measurements
             if (++cycles < 200) {       // 2sec / 10000us = 200
-                *(*dht).timer += 10000;    // Set delay of 10 ms
+                *dht.timer += 10000;    // Set delay of 10 ms
                 break;
             }
-            P1DIR |= (*dht).pin;    // Set pin to output direction
-            P1OUT &= ~(*dht).pin;   // Set output low
+            P1DIR |= dht.pin;    // Set pin to output direction
+            P1OUT &= ~dht.pin;   // Set output low
 
-            *(*dht).timer += 1000;  // Set delay of 1 ms
+            *dht.timer += 1000;  // Set delay of 1 ms
 
             st = 1;
             break;
 
         case 1: // Wait for the sensor response, and process it
-            (*dht).ix = 0;
-            // cnt3 = 0;
+            __disable_interrupt();
+            dht.ok = read_dht();
+            __enable_interrupt();
             st = 2;
-            /*
-            Time critical section
-            Disable interrupts we don't want, enable interrupts we need.
-            */
-            TACCTL1 &= ~CCIE;
-            TACCTL2 &= ~CCIE;
-
-            P1OUT |= (*dht).pin;        // Set output high
-            __delay_cycles(40);         // Delay of 40 us at 1 MHz
-            P1DIR &= ~(*dht).pin;       // Set pin to input direction
-
-            // Recieve sensor's 'handshake' signal
-            // Wait for low level
-            i = 0; while((P1IN & (*dht).pin) && (++i < 80));
-            // Wait for high level
-            i = 0; while((!(P1IN & (*dht).pin)) && (++i < 80));
-
-            P1IES |= (*dht).pin;        // Interrupt on high-to-low edge
-            P1IE |= (*dht).pin;         // Enable pin interrupt
-
-            TAR = 0;
-            *(*dht).timer = 0;
-            *(*dht).timer += 6000;      // Set timeout of 6 ms (maximum response time)
-                                        // (In my setup real response time was about 4 ms)
             break;
 
         case 2: // Wait for timeout
-            P1IE &= ~(*dht).pin;        // Disable pin interrupt
+            // P1IE &= ~dht.pin;        // Disable pin interrupt
             /*
             End of time critical section
             Enable interrupts we disabled in the beginning of the section
             */
-            TACCTL1 |= CCIE;
-            TACCTL2 |= CCIE;
+            // TACCTL0 |= CCIE;
+            // TACCTL1 |= CCIE;
+            // TACCTL2 |= CCIE;
             st = 0;
             break;
     }
 
     if(ost ^ st) {
         cycles = 0;
+    }
+}
+
+
+void startDHT() {
+}
+
+
+void timerDHT() {
+    static DHT_STATE ost, st = WAIT_FOR_START;
+
+    switch (ost = st) {
+        case WAIT_FOR_TIMER:
+        break;
+
+        case WAIT_FOR_START:
+            st = WAIT_2_SECONDS;
+        break;
+
+        case WAIT_2_SECONDS:
+            st = WAIT_FOR_RESPONSE;
+        break;
+
+        case WAIT_FOR_RESPONSE:
+        break;
+
+        case WAIT_FOR_TIMEOUT:
+        break;
     }
 }

@@ -23,8 +23,24 @@ typedef struct DHT {
     DHT_DATA data;      // Data recieved from the sensor
     unsigned int ix;    // Index of bit in the data.bytes array
     unsigned int arr[42];
+    unsigned int tar;   // Timer's value
+    unsigned int cnt;
+    int ok;
 } DHT;
 
-inline void dht_logic(DHT* dht);
+inline void dht_logic();
+
+extern DHT dht;
+
+void startDHT();        // Starts reading process
+void timerDHT();        // Call it on timer interrupt
+
+typedef enum DHT_STATE {
+    WAIT_FOR_TIMER,
+    WAIT_FOR_START,
+    WAIT_2_SECONDS,
+    WAIT_FOR_RESPONSE,
+    WAIT_FOR_TIMEOUT
+} DHT_STATE;
 
 #endif
