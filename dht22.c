@@ -61,12 +61,14 @@ inline int read_dht() {
     __delay_cycles(40);      // Delay of 40 us at 1 MHz
     P1DIR &= ~dht.pin;       // Set pin to input direction
 
+    // Wait for the sensor pulls the level down
     dht.tar = TAR;
     while(P1IN & dht.pin) { if ((TAR - dht.tar) > 100) return -1; }
 
-    for (i = 0; i < 42; i++) {
-        while(!(P1IN & dht.pin)) { if ((TAR - dht.tar) > 100) return -2; }
-        while(P1IN & dht.pin)    { if ((TAR - dht.tar) > 200) return -3; }
+    dht.tar = TAR;
+    for (i = 0; i < 41; i++) {
+        while(!(P1IN & dht.pin)) { if ((TAR - dht.tar) > 100) return -2; }  // Cycle while low
+        while(P1IN & dht.pin)    { if ((TAR - dht.tar) > 200) return -3; }  // Cycle while high
         dht.arr[i] = TAR - dht.tar;
         dht.tar = TAR;
     }
@@ -96,7 +98,7 @@ inline void dht_logic() {
 
         case 1: // Wait for the sensor response, and process it
             __disable_interrupt();
-            dht.ok = read_dht();
+            dht.ok = !read_dht();
             __enable_interrupt();
             st = 2;
             break;
