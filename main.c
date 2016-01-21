@@ -55,17 +55,19 @@ void clearBank(unsigned char bank);
 
 // Helper functions
 
-char* ul2a(unsigned long);
-char* ul2hex(unsigned long);
-char* char2hex(unsigned char);
-char* i2a(int);
+/*
+    Buffer used to convert a number to string.
+    12 bytes is enough to fit signed 32-bit value including terminating zero.
+*/
+char buf [12]; 
+char* ul2a(unsigned long, void*);
+char* ul2hex(unsigned long, void*);
+char* char2hex(unsigned char, void*);
+char* l2a(long, void*);
 
 // Variables for debugging
 volatile static long cnt1 = 0;
 volatile static long cnt2 = 0;
-volatile static long cnt3 = 0;
-volatile static long cnt4 = 0;
-volatile static long cnt5 = 0;
 
 
 // DHT22 sensor related definitions
@@ -171,17 +173,17 @@ void updateLCD(void) {
 
     clearLCD();
     writeStringToLCD("T  ");
-    writeStringToLCD(ok? ul2a(temp) : "-");
+    writeStringToLCD(ok? ul2a(temp, buf) : "-");
     writeCharToLCD(0x7f);
     writeCharToLCD('C');
     setAddr(0, 1);
     writeStringToLCD("RH ");
-    writeStringToLCD(ok? ul2a(hum) : "-");
+    writeStringToLCD(ok? ul2a(hum, buf) : "-");
     writeCharToLCD('%');
     if (dht.error) {
         setAddr(0, 2);
         writeStringToLCD("error:");
-        writeStringToLCD(i2a(dht.error));
+        writeStringToLCD(l2a(dht.error, buf));
     }
 }
 
@@ -322,59 +324,49 @@ void clearBank(unsigned char bank) {
 // 
 
 // Converts unsigned long to string. Returns string
-char* ul2a(unsigned long i) {
+char* ul2a(unsigned long i, void *buf) {
     // 32-bit value can fit into 11-byte buffer, including terminating zero.
-    static char buf[11];
-    char* p = buf + sizeof(buf);
+    char* p = buf + 11;
     *--p = '\0';
     do {
         *--p = i % 10 + '0';
     } while (i /= 10);
+    return p;
+}
+
+// Converts signed long to string. Returns string
+char* l2a(long i, void *buf) {
+    char n = i < 0;
+    if (n) { i = -i; }
+    char* p = ul2a(i, buf + 1);
+    if (n) { *--p = '-'; }
     return p;
 }
 
 // Converts unsigned long to hex string with leading zero. Returns string
-char* ul2hex(unsigned long i) {
+char* ul2hex(unsigned long i, void *buf) {
     // 32-bit value can fit into 9-byte buffer, including terminating zero.
-    static char buf[9];
-    char* p = buf + sizeof(buf);
+    char* p = buf + 9;
     *--p = '\0';
     do {
         *--p = i & 0xf;
         *p += *p > 9 ? 'a'-10 : '0';
         i >>= 4;
-    } while (p > buf);
+    } while (p > (char*)buf);
     return p;
 }
-
-// Converts signed int to string. Returns string
-char* i2a(int i) {
-    // 16-bit value can fit into 7-byte buffer, including negative sign and terminating zero.
-    static char buf[7];
-    char* p = buf + sizeof(buf);
-    char negative = i < 0;
-    *--p = '\0';
-    if (negative) { i = -i; }
-    do {
-        *--p = i % 10 + '0';
-    } while (i /= 10);
-    if(negative) { *--p = '-'; }
-    return p;
-}
-
 
 
 // Converts byte to hex string with leading zero. Returns string
-char* char2hex(unsigned char i) {
+char* char2hex(unsigned char i, void *buf) {
     // 8-bit value can fit into 3-byte buffer, including terminating zero.
-    static char buf[3];
-    char* p = buf + sizeof(buf);
+    char* p = buf + 3;
     *--p = '\0';
     do {
         *--p = i & 0xf;
         *p += *p > 9 ? 'a'-10 : '0';
         i >>= 4;
-    } while (p > buf);
+    } while (p > (char*)buf);
     return p;
 }
 
