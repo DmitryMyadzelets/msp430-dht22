@@ -352,9 +352,9 @@ char* i2a(int i) {
     // 16-bit value can fit into 7-byte buffer, including negative sign and terminating zero.
     static char buf[7];
     char* p = buf + sizeof(buf);
-    char negative = !!(i & 0x8000);
+    char negative = i < 0;
     *--p = '\0';
-    if (negative) { i = (~i & 0x7fff) + 1; }
+    if (negative) { i = -i; }
     do {
         *--p = i % 10 + '0';
     } while (i /= 10);
