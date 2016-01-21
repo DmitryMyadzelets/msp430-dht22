@@ -20,7 +20,7 @@ typedef union DHT_DATA {
 typedef struct DHT {
     int pin;            // MCU pin the sensor is connected to
     volatile *timer;    // Pointer to a TimerA register
-    int ok;
+    int error;
     DHT_DATA data;      // Data recieved from the sensor
     unsigned int arr[41];
     unsigned int tar;   // Timer's value

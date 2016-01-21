@@ -98,7 +98,7 @@ inline void timerDHT(t) {
 
         case 1: // Wait for the sensor response, and process it
             __disable_interrupt();
-            dht.ok = !read_dht();
+            dht.error = read_dht();
             __enable_interrupt();
             st = 0;
         break;

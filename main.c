@@ -58,6 +58,7 @@ void clearBank(unsigned char bank);
 char* ul2a(unsigned long);
 char* ul2hex(unsigned long);
 char* char2hex(unsigned char);
+char* i2a(int);
 
 // Variables for debugging
 volatile static long cnt1 = 0;
@@ -164,7 +165,7 @@ void updateLCD(void) {
     for (i = 0; i < 4; i++) { crc += dht.data.bytes[i]; }
     crc &= 0xff;
 
-    int ok = dht.ok && !(crc ^ dht.data.val.crc);
+    int ok = !dht.error && !(crc ^ dht.data.val.crc);
     int hum = dht.data.val.hh * 256 + dht.data.val.hl;
     int temp = dht.data.val.th * 256 + dht.data.val.tl;
 
@@ -177,6 +178,11 @@ void updateLCD(void) {
     writeStringToLCD("RH ");
     writeStringToLCD(ok? ul2a(hum) : "-");
     writeCharToLCD('%');
+    if (dht.error) {
+        setAddr(0, 2);
+        writeStringToLCD("error:");
+        writeStringToLCD(i2a(dht.error));
+    }
 }
 
 
@@ -229,7 +235,6 @@ void main(void) {
     writeStringToLCD("MSP-430G2553-3");
 
     setupTimerA0();
-    // setupTimerA1();
 
     __enable_interrupt();
 
@@ -342,6 +347,22 @@ char* ul2hex(unsigned long i) {
     return p;
 }
 
+// Converts signed int to string. Returns string
+char* i2a(int i) {
+    // 16-bit value can fit into 7-byte buffer, including negative sign and terminating zero.
+    static char buf[7];
+    char* p = buf + sizeof(buf);
+    char negative = !!(i & 0x8000);
+    *--p = '\0';
+    if (negative) { i = (~i & 0x7fff) + 1; }
+    do {
+        *--p = i % 10 + '0';
+    } while (i /= 10);
+    if(negative) { *--p = '-'; }
+    return p;
+}
+
+
 
 // Converts byte to hex string with leading zero. Returns string
 char* char2hex(unsigned char i) {
@@ -371,7 +392,7 @@ char* char2hex(unsigned char i) {
 // TimerA0 interrupt for register 0
 __attribute__((__interrupt__(TIMER0_A0_VECTOR)))
 isrTimerA0_R0(void) {
-    timerDHT(0);
+    timerDHT();
 }
 
 
@@ -382,8 +403,8 @@ isrTimerA0_IV(void) {
     switch (TAIV) {
         case TA0IV_TACCR1:
             TACCR1 += TIMER_R1_DELAY;
-            cnt2++;
-            break;
+        break;
+
         case TA0IV_TACCR2:
             // Assume interrupt occures each 0.01 sec
             TACCR2 += TIMER_R2_DELAY;
@@ -391,24 +412,7 @@ isrTimerA0_IV(void) {
             if (++i > 99) {
                 i = 0;
                 updateLCD();
-                cnt1 = 0;
-                cnt2 = 0;
             }
-            break;
+        break;
     }
 }
-
-
-// TimerA1 interrupt for register 0
-// __attribute__((__interrupt__(TIMER1_A0_VECTOR)))
-// isrTimerA1_R0(void) {
-//     static int i=0;
-//     if (++i > 9) {
-//         i = 0;
-//         // updateLCD();
-
-//         // cnt1 = 0;
-//         // cnt2 = 0;
-//     }
-// }
-
