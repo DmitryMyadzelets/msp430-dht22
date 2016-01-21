@@ -55,22 +55,19 @@ Returns:
     -3  - error during waiting for low level from the sensor
 */
 inline int read_dht() {
-    register int i;
-
-    P1OUT |= dht.pin;        // Set output high
-    __delay_cycles(40);      // Delay of 40 us at 1 MHz
-    P1DIR &= ~dht.pin;       // Set pin to input direction
+    register unsigned char i;
+    register unsigned int tar;
 
     // Wait for the sensor pulls the level down
-    dht.tar = TAR;
-    while(P1IN & dht.pin) { if ((TAR - dht.tar) > 100) return -1; }
+    tar = TAR;
+    while(P1IN & dht.pin) { if ((TAR - tar) > 200) return -1; }
 
-    dht.tar = TAR;
+    tar = TAR;
     for (i = 0; i < 41; i++) {
-        while(!(P1IN & dht.pin)) { if ((TAR - dht.tar) > 100) return -2; }  // Cycle while low
-        while(P1IN & dht.pin)    { if ((TAR - dht.tar) > 200) return -3; }  // Cycle while high
-        dht.arr[i] = TAR - dht.tar;
-        dht.tar = TAR;
+        while(!(P1IN & dht.pin)) { if ((TAR - tar) > 100) return -2; }  // Cycle while low
+        while(P1IN & dht.pin)    { if ((TAR - tar) > 200) return -3; }  // Cycle while high
+        dht.arr[i] = TAR - tar;
+        tar = TAR;
     }
     return 0;
 }
@@ -85,27 +82,34 @@ inline void timerDHT(t) {
 
         case 0: // Wait 2 seconds to allow the sensor make measurements
             if (++cycles < 40) {       // 2sec / 0.05s = 40
-                *dht.timer += 50000;    // Set delay of 50000 us = 0.05s
+                *dht.timer += 50000;   // Set delay of 50000 us = 0.05s
                 break;
             }
 
-            P1DIR |= dht.pin;    // Set pin to output direction
-            P1OUT &= ~dht.pin;   // Set output low
+            P1DIR |= dht.pin;       // Set pin to output direction
+            P1OUT &= ~dht.pin;      // Set output low
+            P1REN &= ~dht.pin;
 
-            *dht.timer += 1000;  // Set delay of 1 ms
+            *dht.timer += 20000;     // Set delay of 20 ms
             st = 1;
         break;
 
         case 1: // Wait for the sensor response, and process it
+            P1DIR &= ~dht.pin;      // Set pin to input direction
+            P1OUT |= dht.pin;       // Set input high
+            P1REN |= dht.pin;
+
             __disable_interrupt();
             dht.error = read_dht();
             __enable_interrupt();
+
             st = 0;
         break;
     }
 
     if(ost ^ st) {
         cycles = 0;
+        dht.debug++;
     }
 }
 

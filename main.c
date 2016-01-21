@@ -166,7 +166,7 @@ void updateLCD(void) {
     int crc = 0;
     for (i = 0; i < 4; i++) { crc += dht.data.bytes[i]; }
     crc &= 0xff;
-
+    
     int ok = !dht.error && !(crc ^ dht.data.val.crc);
     int hum = dht.data.val.hh * 256 + dht.data.val.hl;
     int temp = dht.data.val.th * 256 + dht.data.val.tl;
@@ -180,11 +180,23 @@ void updateLCD(void) {
     writeStringToLCD("RH ");
     writeStringToLCD(ok? ul2a(hum, buf) : "-");
     writeCharToLCD('%');
+
     if (dht.error) {
         setAddr(0, 2);
         writeStringToLCD("error:");
         writeStringToLCD(l2a(dht.error, buf));
     }
+
+    setAddr(0, 3);
+    static unsigned crc_err = 0;
+    static unsigned dht_err = 0;
+    if (crc ^ dht.data.val.crc) crc_err++;
+    if (dht.error) dht_err++;
+    setAddr(0, 3); writeStringToLCD("crc err: "); writeStringToLCD(l2a(crc_err, buf));
+    setAddr(0, 4); writeStringToLCD("dht err: "); writeStringToLCD(l2a(dht_err, buf));
+
+    setAddr(0, 5);
+    writeStringToLCD(l2a(dht.debug, buf));
 }
 
 
