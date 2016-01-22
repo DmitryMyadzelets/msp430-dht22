@@ -1,6 +1,6 @@
 # http://mrbook.org/blog/tutorials/make/
 
-OBJECTS = main.o dht22.o
+OBJECTS = main.o dht.o
 
 GCC_DIR =  ../../gcc/bin
 SUPPORT_FILE_DIRECTORY = ../../gcc/include

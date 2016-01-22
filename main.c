@@ -26,7 +26,8 @@
 
 #include <msp430g2553.h>
 #include "PCD8544.h"
-#include "dht22.h"
+// #include "dht22.h"
+#include "dht.h"
 
 #define SET(reg, bits) (reg |= bits)
 #define RST(reg, bits) (reg &= ~bits)
@@ -59,7 +60,7 @@ void clearBank(unsigned char bank);
     Buffer used to convert a number to string.
     12 bytes is enough to fit signed 32-bit value including terminating zero.
 */
-char buf [12]; 
+char buf [12];
 char* ul2a(unsigned long, void*);
 char* ul2hex(unsigned long, void*);
 char* char2hex(unsigned char, void*);
@@ -72,40 +73,8 @@ volatile static long cnt2 = 0;
 
 // DHT22 sensor related definitions
 
-DHT dht = { BIT4, &TACCR0};
-// void (*dht_sensor_logic)(DHT*) = dht_logic;
-
-// __attribute__((__interrupt__(PORT1_VECTOR)))
-// isrPort1(void) {
-
-//     if (dht.ix < 42) {
-//         dht.arr[dht.ix] = TAR - dht.tar;
-//         dht.ix++;
-//     }
-
-//     // switch (st) {
-//     //     case 0:                     // Low level on input
-//     //         P1IES &= ~dht.pin;      // Set interrupt on low-to-high edge
-//     //         hi_time = TAR - dht.tar;
-//     //         if (dht.ix < 42) {
-//     //             dht.arr[dht.ix] = lo_time < hi_time;
-//     //             dht.tar = TAR;
-//     //             dht.ix++;
-//     //         }
-//     //         st = 1;
-//     //     break;
-
-//     //     case 1:                     // High level on input
-//     //         P1IES |= dht.pin;       // Set interrupt on high-to-low edge
-//     //         lo_time = TAR - dht.tar;
-//     //         st = 0;
-//     //     break;
-//     // }
-
-//     dht.cnt++;
-//     dht.tar = TAR;
-//     P1IFG &= ~dht.pin;      // Clear port interrupt flag
-// }
+unsigned char dht_buf[6];
+int dht_error = -1;
 
 #define TIMER_R0_DELAY  (200 - 1)
 #define TIMER_R1_DELAY  (1000 - 1)
@@ -124,9 +93,6 @@ void setupTimerA0() {
         | ID_0
     ;
 
-    TACCTL0 |= CCIE;        // Enable interrupt on Register 0 value
-    // TACCR0 = 0;             // Upper value.
-
     TACCTL1 |= CCIE;        // Enable interrupt on Register 1 value
     TACCR1 = TIMER_R1_DELAY;
 
@@ -135,68 +101,33 @@ void setupTimerA0() {
 }
 
 
-// void setupTimerA1() {
-//     TA1CTL = TASSEL_2       // SMCLK clock source
-//         | MC_1              // Count up to TA1CCR0
-//         | ID_3              // Divide by 8, (1000 kHz / 8 = 125 kHz)
-//     ;
-//     TA1CCTL0 |= CCIE;       // Enable interrupt on Register 0 value
-//     TA1CCR0 = 12500 - 1;    // Upper value. Interrupt occurs every 125000 / 12500 = 0.1 sec
-// }
-
-
 void updateLCD(void) {
 
     int i;
 
-    // Convert sensor time intervals to sensor bits
-
-    int byte;
-    // Clear old data
-    for (i = 0; i < 5; i++) { dht.data.bytes[i] = 0; }
-
-    for (i = 0; i < 40; i++) {
-        byte = i >> 3;
-        dht.data.bytes[byte] <<= 1;
-        dht.data.bytes[byte] |= dht.arr[i + 1] > 110;
-    }
-
-    // Check CRC
-
-    int crc = 0;
-    for (i = 0; i < 4; i++) { crc += dht.data.bytes[i]; }
-    crc &= 0xff;
-    
-    int ok = !dht.error && !(crc ^ dht.data.val.crc);
-    int hum = dht.data.val.hh * 256 + dht.data.val.hl;
-    int temp = dht.data.val.th * 256 + dht.data.val.tl;
+    int humidity  = dht_buf[1] * 256 + dht_buf[2];
+    int temperature = dht_buf[3] * 256 + dht_buf[4];
 
     clearLCD();
     writeStringToLCD("T  ");
-    writeStringToLCD(ok? ul2a(temp, buf) : "-");
+    writeStringToLCD(dht_error? "-" : ul2a(temperature, buf));
     writeCharToLCD(0x7f);
     writeCharToLCD('C');
     setAddr(0, 1);
     writeStringToLCD("RH ");
-    writeStringToLCD(ok? ul2a(hum, buf) : "-");
+    writeStringToLCD(dht_error? "-" : ul2a(humidity, buf));
     writeCharToLCD('%');
 
-    if (dht.error) {
+    if (dht_error) {
         setAddr(0, 2);
         writeStringToLCD("error:");
-        writeStringToLCD(l2a(dht.error, buf));
+        writeStringToLCD(l2a(dht_error, buf));
     }
 
     setAddr(0, 3);
-    static unsigned crc_err = 0;
-    static unsigned dht_err = 0;
-    if (crc ^ dht.data.val.crc) crc_err++;
-    if (dht.error) dht_err++;
-    setAddr(0, 3); writeStringToLCD("crc err: "); writeStringToLCD(l2a(crc_err, buf));
-    setAddr(0, 4); writeStringToLCD("dht err: "); writeStringToLCD(l2a(dht_err, buf));
-
-    setAddr(0, 5);
-    writeStringToLCD(l2a(dht.debug, buf));
+    static unsigned cnt_dht_err = 0;
+    if (dht_error) cnt_dht_err++;
+    setAddr(0, 3); writeStringToLCD("dht err: "); writeStringToLCD(l2a(cnt_dht_err, buf));
 }
 
 
@@ -396,7 +327,7 @@ char* char2hex(unsigned char i, void *buf) {
 // TimerA0 interrupt for register 0
 __attribute__((__interrupt__(TIMER0_A0_VECTOR)))
 isrTimerA0_R0(void) {
-    timerDHT();
+    // timerDHT();
 }
 
 
@@ -415,6 +346,9 @@ isrTimerA0_IV(void) {
             // Use counter to get 1 sec interval
             if (++i > 99) {
                 i = 0;
+                __disable_interrupt();
+                dht_error = read_dht_sernsor(dht_buf);
+                __enable_interrupt();
                 updateLCD();
             }
         break;
