@@ -85,31 +85,34 @@ inline void timerDHT(t) {
                 *dht.timer += 50000;   // Set delay of 50000 us = 0.05s
                 break;
             }
+            cycles = 0;
 
             P1DIR |= dht.pin;       // Set pin to output direction
             P1OUT &= ~dht.pin;      // Set output low
             P1REN &= ~dht.pin;
 
-            *dht.timer += 20000;     // Set delay of 20 ms
-            st = 1;
-        break;
+            __disable_interrupt();
+            __delay_cycles(20000);
+        //     *dht.timer += 20000;     // Set delay of 20 ms
+        //     st = 1;
+        // break;
 
-        case 1: // Wait for the sensor response, and process it
+        // case 1: // Wait for the sensor response, and process it
             P1DIR &= ~dht.pin;      // Set pin to input direction
             P1OUT |= dht.pin;       // Set input high
             P1REN |= dht.pin;
 
-            __disable_interrupt();
             dht.error = read_dht();
             __enable_interrupt();
 
             st = 0;
+
         break;
     }
 
     if(ost ^ st) {
-        cycles = 0;
-        dht.debug++;
+        // cycles = 0;
+        // dht.debug++;
     }
 }
 
