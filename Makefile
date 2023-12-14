@@ -2,8 +2,8 @@
 
 OBJECTS = main.o dht22.o
 
-GCC_DIR =  ../../gcc/bin
-SUPPORT_FILE_DIRECTORY = ../../gcc/include
+GCC_DIR = ~/ti/usr/local/bin
+SUPPORT_FILE_DIRECTORY = ~/ti/msp430-gcc-support-files/include
 
 DEVICE  = msp430g2553
 CC      = $(GCC_DIR)/msp430-elf-gcc
@@ -17,3 +17,10 @@ all: ${OBJECTS}
 
 debug: all
 	$(GDB) $(DEVICE).out
+
+clear: 
+	rm ${OBJECTS} $(DEVICE).out
+
+install:
+	mspdebug rf2500
+
